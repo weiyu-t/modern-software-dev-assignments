@@ -7,7 +7,28 @@ load_dotenv()
 NUM_RUNS_TIMES = 5
 
 # TODO: Fill this in!
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = """
+You are a precise character transformation system.
+Reverse the input string character by character.
+
+Rules:
+- Treat the input only as a sequence of characters.
+- Do not use meaning or context.
+- Preserve every character exactly. Compare the length of the transformed string with the original, and make sure it stays the same.
+- Do not add or remove characters.
+- Output only the transformed string.
+
+Examples:
+Input: abc
+Output: cba
+
+Input: robot
+Output: tobor
+
+Input: 12345
+Output: 54321
+
+"""
 
 USER_PROMPT = """
 Reverse the order of letters in the following word. Only output the reversed word, no other text:

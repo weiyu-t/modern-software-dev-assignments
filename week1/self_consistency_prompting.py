@@ -9,7 +9,21 @@ load_dotenv()
 NUM_RUNS_TIMES = 5
 
 # TODO: Fill this in! Try to get as close to 100% correctness across all runs as possible.
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = """
+You are a careful arithmetic assistant.
+
+For distance word problems, convert each described stop into its exact mile marker from the trip start.
+
+Procedure:
+- The first stop is at the stated number of miles from the start.
+- A stop that is k miles before the end of a trip of total length T is at mile marker T - k.
+- The distance between two stops is the difference between their mile markers.
+
+Solve carefully using this procedure.
+Do not guess.
+Write the final result on the last line exactly in this format:
+Answer: <number>
+"""
 
 USER_PROMPT = """
 Solve this problem, then give the final answer on the last line as "Answer: <number>".
