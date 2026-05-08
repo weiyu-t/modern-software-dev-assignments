@@ -1,22 +1,49 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Optional
 
+from .config import get_settings
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "app.db"
+
+@dataclass(frozen=True)
+class Note:
+    id: int
+    content: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class ActionItem:
+    id: int
+    note_id: int | None
+    text: str
+    done: bool
+    created_at: str
+
+
+def _note_from_row(row: sqlite3.Row) -> Note:
+    return Note(id=int(row["id"]), content=str(row["content"]), created_at=str(row["created_at"]))
+
+
+def _action_item_from_row(row: sqlite3.Row) -> ActionItem:
+    return ActionItem(
+        id=int(row["id"]),
+        note_id=int(row["note_id"]) if row["note_id"] is not None else None,
+        text=str(row["text"]),
+        done=bool(row["done"]),
+        created_at=str(row["created_at"]),
+    )
 
 
 def ensure_data_directory_exists() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    get_settings().data_dir.mkdir(parents=True, exist_ok=True)
 
 
 def get_connection() -> sqlite3.Connection:
     ensure_data_directory_exists()
-    connection = sqlite3.connect(DB_PATH)
+    connection = sqlite3.connect(get_settings().db_path)
     connection.row_factory = sqlite3.Row
     return connection
 
@@ -57,14 +84,14 @@ def insert_note(content: str) -> int:
         return int(cursor.lastrowid)
 
 
-def list_notes() -> list[sqlite3.Row]:
+def list_notes() -> list[Note]:
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute("SELECT id, content, created_at FROM notes ORDER BY id DESC")
-        return list(cursor.fetchall())
+        return [_note_from_row(row) for row in cursor.fetchall()]
 
 
-def get_note(note_id: int) -> Optional[sqlite3.Row]:
+def get_note(note_id: int) -> Note | None:
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
@@ -72,7 +99,7 @@ def get_note(note_id: int) -> Optional[sqlite3.Row]:
             (note_id,),
         )
         row = cursor.fetchone()
-        return row
+        return _note_from_row(row) if row is not None else None
 
 
 def insert_action_items(items: list[str], note_id: Optional[int] = None) -> list[int]:
@@ -89,7 +116,7 @@ def insert_action_items(items: list[str], note_id: Optional[int] = None) -> list
         return ids
 
 
-def list_action_items(note_id: Optional[int] = None) -> list[sqlite3.Row]:
+def list_action_items(note_id: Optional[int] = None) -> list[ActionItem]:
     with get_connection() as connection:
         cursor = connection.cursor()
         if note_id is None:
@@ -98,19 +125,21 @@ def list_action_items(note_id: Optional[int] = None) -> list[sqlite3.Row]:
             )
         else:
             cursor.execute(
-                "SELECT id, note_id, text, done, created_at FROM action_items WHERE note_id = ? ORDER BY id DESC",
+                "SELECT id, note_id, text, done, created_at FROM action_items "
+                "WHERE note_id = ? ORDER BY id DESC",
                 (note_id,),
             )
-        return list(cursor.fetchall())
+        return [_action_item_from_row(row) for row in cursor.fetchall()]
 
 
-def mark_action_item_done(action_item_id: int, done: bool) -> None:
+def mark_action_item_done(action_item_id: int, done: bool) -> bool:
+    """Return True if a row was updated."""
     with get_connection() as connection:
         cursor = connection.cursor()
         cursor.execute(
             "UPDATE action_items SET done = ? WHERE id = ?",
             (1 if done else 0, action_item_id),
         )
+        changed = cursor.rowcount > 0
         connection.commit()
-
-
+        return changed

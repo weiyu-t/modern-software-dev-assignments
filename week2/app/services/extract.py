@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import os
 import re
 from typing import List
-import json
-from typing import Any
-from ollama import chat
+
 from dotenv import load_dotenv
+from ollama import chat
+from pydantic import BaseModel, Field
+
+from ..config import get_settings
 
 load_dotenv()
 
@@ -87,3 +88,55 @@ def _looks_imperative(sentence: str) -> bool:
         "investigate",
     }
     return first.lower() in imperative_starters
+
+
+# --- Exercise 1: LLM-powered extraction (scaffold; same I/O as ``extract_action_items``) ---
+
+
+class _ActionItemsLLMResponse(BaseModel):
+    """Structured JSON shape returned by Ollama (see https://ollama.com/blog/structured-outputs)."""
+
+    items: List[str] = Field(default_factory=list)
+
+
+_SYSTEM_PROMPT_EXTRACT_LLM = (
+    "You extract concrete action items from notes, meeting minutes, and task-like text. "
+    "Each item must be a single clear, actionable task. "
+    "Remove unnecessary numbers and unnecessary punctuation from each returned item "
+    "(keep wording natural and readable). "
+    "Do not include bullet symbols, numeric list prefixes, checkboxes, or labels like TODO in the strings."
+)
+
+
+def extract_action_items_llm(text: str) -> List[str]:
+    """Extract action items using a local Ollama model; returns the same type as ``extract_action_items``."""
+    stripped = text.strip()
+    if not stripped:
+        return []
+
+    response = chat(
+        model=get_settings().ollama_model,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT_EXTRACT_LLM},
+            {"role": "user", "content": stripped},
+        ],
+        format=_ActionItemsLLMResponse.model_json_schema(),
+        options={"temperature": 0},
+    )
+    raw = response.message.content
+    if not raw:
+        return []
+
+    parsed = _ActionItemsLLMResponse.model_validate_json(raw)
+    seen: set[str] = set()
+    out: List[str] = []
+    for item in parsed.items:
+        cleaned = item.strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+    return out
